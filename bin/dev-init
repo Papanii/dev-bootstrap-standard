@@ -1,0 +1,177 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# --------------------------------------------
+# dev-init — Personal Dev Bootstrap Standard
+# --------------------------------------------
+
+FORCE=false
+
+# Locate repo root (relative to this script)
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+BIN_DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+ROOT_DIR="$(cd "$BIN_DIR/.." >/dev/null 2>&1 && pwd)"
+
+VERSION_FILE="$ROOT_DIR/VERSION"
+TEMPLATE_FILE="$ROOT_DIR/templates/CLAUDE.section.md"
+
+usage() {
+  cat <<'EOF'
+Usage: dev-init [--force] [--version] [--help]
+
+Options:
+  --force     Skip confirmation when outside $HOME/Development
+  --version   Print version
+  --help      Show help
+EOF
+}
+
+ok()   { printf "✔ %s\n" "$*"; }
+warn() { printf "⚠ %s\n" "$*" >&2; }
+err()  { printf "✖ %s\n" "$*" >&2; }
+
+need_cmd() { command -v "$1" >/dev/null 2>&1; }
+is_tty() { [[ -t 0 ]]; }
+
+realpath_() {
+  if need_cmd realpath; then
+    realpath "$1"
+  else
+    pwd -P
+  fi
+}
+
+inside_dev() {
+  local cwd="$1"
+  local dev="${HOME%/}/Development"
+  [[ "${cwd}/" == "${dev}/"* ]] || [[ "$cwd" == "$dev" ]]
+}
+
+confirm_if_outside_dev() {
+  local cwd="$1"
+  local dev="${HOME%/}/Development"
+
+  if inside_dev "$cwd"; then
+    return 0
+  fi
+
+  if $FORCE; then
+    warn "Outside $dev, but --force provided. Proceeding."
+    return 0
+  fi
+
+  if ! is_tty; then
+    err "Non-interactive shell and directory is outside $dev. Use --force."
+    exit 2
+  fi
+
+  printf "This directory is not inside %s. Proceed? (y/n) " "$dev" >&2
+  read -r ans
+  [[ "$ans" == "y" ]] || { warn "Aborted."; exit 3; }
+}
+
+print_version() {
+  if [[ -f "$VERSION_FILE" ]]; then
+    echo "dev-init v$(cat "$VERSION_FILE")"
+  else
+    echo "dev-init (version unknown)"
+  fi
+}
+
+ensure_claude_md() {
+  local file="CLAUDE.md"
+
+  if [[ ! -f "$TEMPLATE_FILE" ]]; then
+    err "Missing template: $TEMPLATE_FILE"
+    exit 10
+  fi
+
+  local section
+  section="$(cat "$TEMPLATE_FILE")"
+  local title
+  title="$(head -n 1 "$TEMPLATE_FILE")"
+
+  if [[ ! -f "$file" ]]; then
+    printf "%s\n\n" "$section" > "$file"
+    ok "Created $file"
+    return
+  fi
+
+  local tmp
+  tmp="$(mktemp)"
+
+  if grep -qF "$title" "$file"; then
+    awk -v title="$title" -v newsec="$section" '
+      BEGIN {insec=0}
+      {
+        if ($0 == title) { print newsec "\n"; insec=1; next }
+        if (insec==1) {
+          if ($0 ~ /^##[[:space:]]+/) { insec=0; print $0 }
+          else { next }
+        } else {
+          print $0
+        }
+      }
+    ' "$file" > "$tmp"
+    mv "$tmp" "$file"
+  else
+    printf "%s\n\n" "$section" > "$tmp"
+    cat "$file" >> "$tmp"
+    mv "$tmp" "$file"
+  fi
+
+  ok "Updated $file"
+}
+
+run_bd_init() {
+  if ! need_cmd bd; then
+    err "bd not found in PATH."
+    exit 20
+  fi
+
+  set +e
+  out="$(bd init 2>&1)"
+  code=$?
+  set -e
+
+  if [[ $code -eq 0 ]]; then
+    ok "Ran bd init"
+    return
+  fi
+
+  if echo "$out" | grep -Eqi 'already|exists|initialized'; then
+    warn "bd already initialized"
+    return
+  fi
+
+  err "bd init failed:"
+  err "$out"
+  exit "$code"
+}
+
+main() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --force) FORCE=true; shift ;;
+      --version) print_version; exit 0 ;;
+      --help|-h) usage; exit 0 ;;
+      *) err "Unknown option: $1"; usage; exit 64 ;;
+    esac
+  done
+
+  local cwd
+  cwd="$(realpath_ ".")"
+
+  confirm_if_outside_dev "$cwd"
+  ensure_claude_md
+  run_bd_init
+
+  ok "Done."
+}
+
+main "$@"
