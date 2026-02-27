@@ -158,6 +158,27 @@ ensure_claude_md() {
   ok "Updated $file"
 }
 
+run_speckit_init() {
+  if ! need_cmd specify; then
+    warn "specify not found in PATH. Skipping speckit initialization."
+    return
+  fi
+
+  # Initialize speckit with Claude AI for spec-driven development
+  printf "Initializing speckit...\n"
+
+  set +e
+  specify init . --ai claude 2>&1
+  code=$?
+  set -e
+
+  if [[ $code -eq 0 ]]; then
+    ok "Speckit initialization complete."
+  else
+    warn "speckit init exited with code $code. Continuing."
+  fi
+}
+
 run_bd_init() {
   if ! need_cmd bd; then
     err "bd not found in PATH."
@@ -196,8 +217,9 @@ main() {
   cwd="$(realpath_ ".")"
 
   confirm_if_outside_dev "$cwd"
-  ensure_git_init "$cwd"
   ensure_claude_md
+  run_speckit_init
+  ensure_git_init "$cwd"
   run_bd_init
 
   ok "Done."

@@ -8,6 +8,7 @@ projects under `$HOME/Development`.
 This tool ensures every project starts with:
 
 -   AI-agent readiness
+-   Spec-driven development via speckit
 -   Enforced `bd` task tracking
 -   Canonical `CLAUDE.md` structure
 -   Safe execution boundaries
@@ -39,9 +40,11 @@ This is not a convenience script. It is development infrastructure.
 **Recommended:**
 
 -   `git`
+-   `specify` — speckit CLI for spec-driven development
 -   `beadsync` — syncs `bd` tasks to GitHub Issues
 
 `dev-init` will fail immediately if `bd` is not found in PATH.
+`specify` is optional — if not found, speckit initialization is skipped with a warning.
 
 ------------------------------------------------------------------------
 
@@ -106,8 +109,10 @@ dev-init --help
 
 1.  Validates the execution context (must be inside `$HOME/Development` or `--force`)
 2.  Ensures `CLAUDE.md` exists with the canonical section at the top
-3.  Runs `bd init` to initialize task tracking
-4.  Remains idempotent — safe to run multiple times without duplication or corruption
+3.  Runs `specify init . --ai claude` to initialize speckit for spec-driven development
+4.  Initializes a `git` repository and sets the remote origin
+5.  Runs `bd init` to initialize task tracking
+6.  Remains idempotent — safe to run multiple times without duplication or corruption
 
 ------------------------------------------------------------------------
 
