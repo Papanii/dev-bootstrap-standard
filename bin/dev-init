@@ -134,24 +134,22 @@ run_bd_init() {
     exit 20
   fi
 
+  printf "Initializing beads (scanning git history)...\n"
+
   set +e
-  out="$(bd init 2>&1)"
+  bd init 2>&1
   code=$?
   set -e
 
   if [[ $code -eq 0 ]]; then
-    ok "Ran bd init"
+    ok "Beads initialization complete."
     return
   fi
 
-  if echo "$out" | grep -Eqi 'already|exists|initialized'; then
-    warn "bd already initialized"
+  if [[ $code -ne 0 ]]; then
+    warn "bd already initialized or init skipped (exit $code)"
     return
   fi
-
-  err "bd init failed:"
-  err "$out"
-  exit "$code"
 }
 
 main() {
