@@ -83,6 +83,36 @@ print_version() {
   fi
 }
 
+ensure_git_init() {
+  local cwd="$1"
+  local repo_name
+  repo_name="$(basename "$cwd")"
+
+  if [[ ! -d ".git" ]]; then
+    git init
+    ok "Initialized git repository"
+  fi
+
+  if git remote get-url origin >/dev/null 2>&1; then
+    ok "Remote origin already set: $(git remote get-url origin)"
+    return
+  fi
+
+  local gh_user
+  if need_cmd gh; then
+    gh_user="$(gh api user --jq .login 2>/dev/null)"
+  fi
+
+  if [[ -z "${gh_user:-}" ]]; then
+    warn "Could not determine GitHub username. Skipping origin setup."
+    return
+  fi
+
+  local origin_url="https://github.com/${gh_user}/${repo_name}.git"
+  git remote add origin "$origin_url"
+  ok "Added remote origin: $origin_url"
+}
+
 ensure_claude_md() {
   local file="CLAUDE.md"
 
@@ -166,6 +196,7 @@ main() {
   cwd="$(realpath_ ".")"
 
   confirm_if_outside_dev "$cwd"
+  ensure_git_init "$cwd"
   ensure_claude_md
   run_bd_init
 
