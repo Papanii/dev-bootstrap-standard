@@ -259,9 +259,9 @@ create_github_repo() {
     return
   fi
 
-  printf "Creating GitHub repository '%s'...\n" "$name"
+  printf "Creating GitHub repository '%s' (private)...\n" "$name"
   gh repo create "$name" --source=. --private --push
-  ok "GitHub repository created and pushed: $name"
+  ok "GitHub repository created (private) and pushed: $name"
 }
 
 create_github_project() {
