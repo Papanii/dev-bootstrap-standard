@@ -1,3 +1,9 @@
+## General 
+- Never remove existing behavior without explicit instruction
+- Always add unit tests for new logic
+- Avoid modifying unrelated files
+- Prefer small, incremental PRs
+
 ## Instructions for the Claude Agent
 
 - Use GitHub for source control. If git is not installed or configured, give a warning.
