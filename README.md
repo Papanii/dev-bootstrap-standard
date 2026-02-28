@@ -115,7 +115,7 @@ Then executes in order:
 4.  Copies the PR template to `.github/PULL_REQUEST_TEMPLATE.md`
 5.  Ensures `CLAUDE.md` exists with the canonical agent instructions section
 6.  Creates an initial commit (`chore: initial project setup`)
-7.  Creates the GitHub repository via `gh repo create <folder-name> --source=. --public --push`
+7.  Creates the GitHub repository as **private** via `gh repo create <folder-name> --source=. --private --push`
 8.  Creates a GitHub Projects (v2) board via `gh project create --owner @me --title "<title>"`
 
 ------------------------------------------------------------------------

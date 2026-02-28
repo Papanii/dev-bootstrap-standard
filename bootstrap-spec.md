@@ -100,7 +100,7 @@ Steps execute in this order:
 4.  Copy PR template to `.github/PULL_REQUEST_TEMPLATE.md`
 5.  Ensure `CLAUDE.md` contains the canonical section
 6.  `git add` + `git commit -m "chore: initial project setup"`
-7.  `gh repo create <folder-name> --source=. --public --push`
+7.  `gh repo create <folder-name> --source=. --private --push`
 8.  `gh project create --owner @me --title "<kanban-title>"` (if title provided)
 
 ------------------------------------------------------------------------

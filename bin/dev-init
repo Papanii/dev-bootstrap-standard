@@ -260,7 +260,7 @@ create_github_repo() {
   fi
 
   printf "Creating GitHub repository '%s'...\n" "$name"
-  gh repo create "$name" --source=. --public --push
+  gh repo create "$name" --source=. --private --push
   ok "GitHub repository created and pushed: $name"
 }
 
