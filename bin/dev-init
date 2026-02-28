@@ -288,10 +288,14 @@ create_github_project() {
 
   if [[ $code -eq 0 ]]; then
     ok "GitHub Projects board created: $title"
-  elif echo "$output" | grep -q "missing required scopes"; then
-    warn "GitHub Projects board creation failed — missing auth scopes."
-    printf "  Run the following, then re-run dev-init:\n" >&2
-    printf "  gh auth refresh -s project,read:project\n" >&2
+    return
+  fi
+
+  if echo "$output" | grep -q "missing required scopes"; then
+    printf "Refreshing GitHub auth scopes for Projects...\n"
+    gh auth refresh -s project,read:project
+    gh project create --owner @me --title "$title"
+    ok "GitHub Projects board created: $title"
   else
     warn "GitHub Projects board creation failed: $output"
   fi
