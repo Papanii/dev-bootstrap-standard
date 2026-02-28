@@ -18,7 +18,8 @@ BIN_DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
 ROOT_DIR="$(cd "$BIN_DIR/.." >/dev/null 2>&1 && pwd)"
 
 VERSION_FILE="$ROOT_DIR/VERSION"
-TEMPLATE_FILE="$ROOT_DIR/templates/CLAUDE.section.md"
+CLAUDE_TEMPLATE="$ROOT_DIR/templates/CLAUDE.section.md"
+PR_TEMPLATE_SRC="$ROOT_DIR/templates/Pr-Template.md"
 
 usage() {
   cat <<'EOF'
@@ -36,7 +37,7 @@ warn() { printf "⚠ %s\n" "$*" >&2; }
 err()  { printf "✖ %s\n" "$*" >&2; }
 
 need_cmd() { command -v "$1" >/dev/null 2>&1; }
-is_tty() { [[ -t 0 ]]; }
+is_tty()   { [[ -t 0 ]]; }
 
 realpath_() {
   if need_cmd realpath; then
@@ -83,48 +84,124 @@ print_version() {
   fi
 }
 
-ensure_git_init() {
-  local cwd="$1"
-  local repo_name
-  repo_name="$(basename "$cwd")"
+# Collect all user input upfront before any file operations
+collect_inputs() {
+  local repo_name="$1"
 
+  if ! is_tty; then
+    PROJECT_DESC=""
+    KANBAN_TITLE=""
+    return
+  fi
+
+  printf "\n"
+  printf "Project: %s\n" "$repo_name"
+  printf "\n"
+
+  printf "Short project description: " >&2
+  read -r PROJECT_DESC
+
+  printf "GitHub Projects board title (leave blank to skip): " >&2
+  read -r KANBAN_TITLE
+
+  printf "\n"
+}
+
+ensure_git_init() {
   if [[ ! -d ".git" ]]; then
     git init
     ok "Initialized git repository"
+  else
+    ok "Git repository already initialized"
   fi
+}
 
-  if git remote get-url origin >/dev/null 2>&1; then
-    ok "Remote origin already set: $(git remote get-url origin)"
+generate_readme() {
+  local name="$1"
+  local desc="$2"
+
+  if [[ -f "README.md" ]]; then
+    ok "README.md already exists — skipping generation"
     return
   fi
 
-  local gh_user
-  if need_cmd gh; then
-    gh_user="$(gh api user --jq .login 2>/dev/null)"
+  cat > README.md <<EOF
+# ${name}
+
+${desc}
+
+## Overview
+
+> Expand this section with architecture decisions, key concepts, and context
+> that helps contributors (human or AI) understand the project quickly.
+
+## Setup
+
+\`\`\`bash
+# Clone the repository
+git clone <repo-url>
+cd ${name}
+
+# Install dependencies
+# (add your setup steps here)
+\`\`\`
+
+## Development Workflow
+
+1. Create a feature branch from \`main\`
+2. Make your changes with clear, focused commits
+3. Open a pull request using the project PR template
+4. Request review and address feedback
+5. Merge after approval
+
+## Pull Request Process
+
+All pull requests must follow the PR template at:
+\`.github/PULL_REQUEST_TEMPLATE.md\`
+
+Every PR must include:
+- A clear problem statement linked to an issue
+- A summary of changes
+- Test evidence
+- Rollback plan
+
+Human review is mandatory before merging.
+EOF
+
+  ok "Generated README.md"
+}
+
+ensure_pr_template() {
+  local dest=".github/PULL_REQUEST_TEMPLATE.md"
+
+  if [[ ! -f "$PR_TEMPLATE_SRC" ]]; then
+    err "Missing PR template source: $PR_TEMPLATE_SRC"
+    exit 10
   fi
 
-  if [[ -z "${gh_user:-}" ]]; then
-    warn "Could not determine GitHub username. Skipping origin setup."
+  mkdir -p ".github"
+
+  if [[ -f "$dest" ]]; then
+    ok "PR template already exists at $dest — skipping"
     return
   fi
 
-  local origin_url="https://github.com/${gh_user}/${repo_name}.git"
-  git remote add origin "$origin_url"
-  ok "Added remote origin: $origin_url"
+  cp "$PR_TEMPLATE_SRC" "$dest"
+  ok "Created $dest"
 }
 
 ensure_claude_md() {
   local file="CLAUDE.md"
 
-  if [[ ! -f "$TEMPLATE_FILE" ]]; then
-    err "Missing template: $TEMPLATE_FILE"
+  if [[ ! -f "$CLAUDE_TEMPLATE" ]]; then
+    err "Missing template: $CLAUDE_TEMPLATE"
     exit 10
   fi
 
   local section
-  section="$(cat "$TEMPLATE_FILE")"
+  section="$(cat "$CLAUDE_TEMPLATE")"
   local title
-  title="$(head -n 1 "$TEMPLATE_FILE")"
+  title="$(head -n 1 "$CLAUDE_TEMPLATE")"
 
   if [[ ! -f "$file" ]]; then
     printf "%s\n\n" "$section" > "$file"
@@ -158,49 +235,51 @@ ensure_claude_md() {
   ok "Updated $file"
 }
 
-run_speckit_init() {
-  if ! need_cmd specify; then
-    warn "specify not found in PATH. Skipping speckit initialization."
+create_initial_commit() {
+  if git rev-parse HEAD >/dev/null 2>&1; then
+    ok "Repository already has commits — skipping initial commit"
     return
   fi
 
-  # Initialize speckit with Claude AI for spec-driven development
-  printf "Initializing speckit...\n"
-
-  set +e
-  specify init . --ai claude 2>&1
-  code=$?
-  set -e
-
-  if [[ $code -eq 0 ]]; then
-    ok "Speckit initialization complete."
-  else
-    warn "speckit init exited with code $code. Continuing."
-  fi
+  git add README.md .github/PULL_REQUEST_TEMPLATE.md CLAUDE.md 2>/dev/null || true
+  git commit -m "chore: initial project setup"
+  ok "Created initial commit"
 }
 
-run_bd_init() {
-  if ! need_cmd bd; then
-    err "bd not found in PATH."
-    exit 20
-  fi
+create_github_repo() {
+  local name="$1"
 
-  printf "Initializing beads (scanning git history)...\n"
-
-  set +e
-  bd init 2>&1
-  code=$?
-  set -e
-
-  if [[ $code -eq 0 ]]; then
-    ok "Beads initialization complete."
+  if ! need_cmd gh; then
+    warn "gh not found in PATH. Skipping GitHub repository creation."
     return
   fi
 
-  if [[ $code -ne 0 ]]; then
-    warn "bd already initialized or init skipped (exit $code)"
+  if git remote get-url origin >/dev/null 2>&1; then
+    ok "Remote origin already set: $(git remote get-url origin)"
     return
   fi
+
+  printf "Creating GitHub repository '%s'...\n" "$name"
+  gh repo create "$name" --source=. --public --push
+  ok "GitHub repository created and pushed: $name"
+}
+
+create_github_project() {
+  local title="$1"
+
+  if [[ -z "$title" ]]; then
+    warn "No Kanban board title provided. Skipping GitHub Projects board creation."
+    return
+  fi
+
+  if ! need_cmd gh; then
+    warn "gh not found in PATH. Skipping GitHub Projects board creation."
+    return
+  fi
+
+  printf "Creating GitHub Projects board '%s'...\n" "$title"
+  gh project create --owner @me --title "$title"
+  ok "GitHub Projects board created: $title"
 }
 
 main() {
@@ -217,10 +296,27 @@ main() {
   cwd="$(realpath_ ".")"
 
   confirm_if_outside_dev "$cwd"
+
+  local repo_name
+  repo_name="$(basename "$cwd")"
+
+  # Collect all prompts before touching the filesystem
+  PROJECT_DESC=""
+  KANBAN_TITLE=""
+  collect_inputs "$repo_name"
+
+  # File operations
+  ensure_git_init
+  generate_readme "$repo_name" "$PROJECT_DESC"
+  ensure_pr_template
   ensure_claude_md
-  run_speckit_init
-  ensure_git_init "$cwd"
-  run_bd_init
+
+  # Commit before pushing
+  create_initial_commit
+
+  # GitHub operations
+  create_github_repo "$repo_name"
+  create_github_project "$KANBAN_TITLE"
 
   ok "Done."
 }

@@ -15,7 +15,7 @@ This standard ensures:
 
 -   Consistency across projects\
 -   AI-agent readiness\
--   Enforced task tracking discipline\
+-   Enforced PR discipline\
 -   Safe execution boundaries\
 -   Idempotent initialization behavior
 
@@ -38,15 +38,20 @@ It may be used elsewhere only with explicit confirmation (`--force`).
 
 This standard is enforced via:
 
-dev-init
+    dev-init
 
 The command must:
 
-1.  Validate execution context\
-2.  Ensure `CLAUDE.md` compliance\
-3.  Initialize Beads (`bd init`)\
-4.  Remain idempotent\
-5.  Fail safely on missing required dependencies
+1.  Validate execution context
+2.  Collect user inputs upfront (description, Kanban board title)
+3.  Ensure `CLAUDE.md` compliance
+4.  Generate a `README.md` from project description
+5.  Install the PR template at `.github/PULL_REQUEST_TEMPLATE.md`
+6.  Create an initial commit
+7.  Create the GitHub repository
+8.  Create the GitHub Projects (v2) board
+9.  Remain idempotent
+10. Fail safely on missing required dependencies
 
 ------------------------------------------------------------------------
 
@@ -54,7 +59,7 @@ The command must:
 
 Before modifying anything:
 
--   Resolve the current working directory (handle symlinks).\
+-   Resolve the current working directory (handle symlinks).
 
 -   Determine whether the directory is inside:
 
@@ -70,100 +75,128 @@ This prevents accidental modification of unintended directories.
 
 ------------------------------------------------------------------------
 
-## 5. CLAUDE.md Standard
+## 5. User Inputs
+
+`dev-init` collects all user input **before** touching the filesystem.
+This ensures no partial state is written if the user aborts.
+
+| Prompt                    | Used for                              |
+|---------------------------|---------------------------------------|
+| Short project description | README.md overview section            |
+| GitHub Projects board title | `gh project create --title`         |
+
+The **repository name** is always derived from the local directory name.
+It is not prompted — it is inferred.
+
+------------------------------------------------------------------------
+
+## 6. Initialization Sequence
+
+Steps execute in this order:
+
+1.  `git init` — initialize the repository if not already done
+2.  Collect user inputs (description, Kanban title)
+3.  Generate `README.md` using the project description
+4.  Copy PR template to `.github/PULL_REQUEST_TEMPLATE.md`
+5.  Ensure `CLAUDE.md` contains the canonical section
+6.  `git add` + `git commit -m "chore: initial project setup"`
+7.  `gh repo create <folder-name> --source=. --public --push`
+8.  `gh project create --owner @me --title "<kanban-title>"` (if title provided)
+
+------------------------------------------------------------------------
+
+## 7. CLAUDE.md Standard
 
 Every initialized project must contain:
 
-CLAUDE.md
+    CLAUDE.md
 
 At the top of the file, the following canonical section must exist:
 
     ## Instructions for the Claude Agent
 
-    - Use `bd` for task tracking.
-    - Use beadsync to upload beads to GitHub as GitHub Issues.
-
 ### Rules
 
 -   If `CLAUDE.md` does not exist → create it.\
 -   If it exists → ensure the canonical section:
-    -   Exists exactly once\
-    -   Is updated if necessary\
-    -   Is positioned at the top of the file\
+    -   Exists exactly once
+    -   Is updated if the template has changed
+    -   Is positioned at the top of the file
 -   No duplication is permitted.\
 -   The operation must be idempotent.
 
-The canonical section content must be sourced from:
+The canonical section content is sourced from:
 
-templates/CLAUDE.section.md
+    templates/CLAUDE.section.md
 
 The implementation must not hardcode this content.
 
 ------------------------------------------------------------------------
 
-## 6. Task Tracking Standard
+## 8. PR Template Standard
 
-Every project initialized under this standard must:
+Every initialized project must contain a PR template at:
 
--   Run `bd init`\
--   Use `bd` for task tracking\
--   Use `beadsync` to upload beads to GitHub Issues
+    .github/PULL_REQUEST_TEMPLATE.md
 
-This is mandatory.
+This template is sourced from:
 
-If `bd` is not installed, initialization must fail.
+    templates/Pr-Template.md
+
+The template enforces structured pull requests for both human contributors
+and AI agents. It is non-negotiable — every repository must have it.
 
 ------------------------------------------------------------------------
 
-## 7. Idempotency Requirements
+## 9. Idempotency Requirements
 
 Running `dev-init` multiple times must:
 
--   Not duplicate `CLAUDE.md` sections\
--   Not corrupt existing content\
--   Not fail if `bd` has already been initialized
+-   Not duplicate `CLAUDE.md` sections
+-   Not overwrite an existing `README.md`
+-   Not overwrite an existing PR template
+-   Not create duplicate commits
+-   Not fail if the GitHub repository already has a remote origin set
 
 Re-running initialization must be safe and predictable.
 
 ------------------------------------------------------------------------
 
-## 8. Dependencies
+## 10. Dependencies
 
 Required:
 
--   bd
+-   `git`
+-   `gh` (GitHub CLI)
 
-Recommended:
-
--   git\
--   beadsync
-
-Missing required dependencies must result in failure.
+Missing required dependencies result in warnings, not hard failures,
+for `gh`-dependent steps. Missing `git` is a hard failure.
 
 ------------------------------------------------------------------------
 
-## 9. Canonical Folder Structure
+## 11. Canonical Folder Structure
 
     dev-bootstrap-standard/
     ├── bin/
     │   └── dev-init
     ├── templates/
-    │   └── CLAUDE.section.md
+    │   ├── CLAUDE.section.md
+    │   └── Pr-Template.md
     ├── bootstrap-spec.md
     ├── VERSION
     └── README.md
 
 ------------------------------------------------------------------------
 
-## 10. Versioning
+## 12. Versioning
 
 The active version of this standard is defined in:
 
-VERSION
+    VERSION
 
 Versioning follows:
 
-MAJOR.MINOR.PATCH
+    MAJOR.MINOR.PATCH
 
 -   MAJOR → Breaking changes\
 -   MINOR → Backward-compatible enhancements\
@@ -173,7 +206,7 @@ Git tags should align with VERSION.
 
 ------------------------------------------------------------------------
 
-## 11. Installation & Activation
+## 13. Installation & Activation
 
 Make the CLI executable:
 
@@ -193,14 +226,14 @@ After updating \~/.zshrc, reload your shell:
 
 ------------------------------------------------------------------------
 
-## 12. Philosophy
+## 14. Philosophy
 
 Projects initialized under this standard should be:
 
 -   AI-native\
--   Measurable\
 -   Reproducible\
 -   Safe\
+-   GitHub-native\
 -   Iteratively improvable
 
 This standard exists to industrialize development at the personal level.
